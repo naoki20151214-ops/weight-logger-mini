@@ -109,3 +109,25 @@ button:hover {
     width: 100%;
   }
 }
+
+.form-message {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+}
+
+.form-message.info {
+  color: #1f2937;
+}
+
+.form-message.success {
+  color: #166534;
+}
+
+.form-message.error {
+  color: #b91c1c;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
