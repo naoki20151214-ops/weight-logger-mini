@@ -40,10 +40,15 @@ function saveRecords(records) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 }
 
+function normalizeAndSaveRecords(records) {
+  const normalized = normalizeRecordsByDate(records);
+  saveRecords(normalized);
+  return normalized;
+}
+
 function saveRecord(records, record) {
   const nextRecords = [...records, record];
-  saveRecords(nextRecords);
-  return nextRecords;
+  return normalizeAndSaveRecords(nextRecords);
 }
 
 function replaceRecordByDate(records, record) {
@@ -62,14 +67,17 @@ function normalizeRecordsByDate(records) {
 
 function updateRecord(records, record) {
   const nextRecords = replaceRecordByDate(records, record);
-  saveRecords(nextRecords);
-  return nextRecords;
+  return normalizeAndSaveRecords(nextRecords);
 }
 
 function deleteRecord(records, index) {
   const nextRecords = records.filter((_, recordIndex) => recordIndex !== index);
   saveRecords(nextRecords);
   return nextRecords;
+}
+
+function prepareRecordsForSave(records) {
+  return normalizeRecordsByDate(records);
 }
 
 function getRecordsNewestFirst(records) {
@@ -184,8 +192,7 @@ function initializeApp() {
 
   dateInput.value = getTodayDate();
 
-  let records = normalizeRecordsByDate(loadRecords());
-  saveRecords(records);
+  let records = normalizeAndSaveRecords(loadRecords());
   renderRecords(records);
   updateReportOutput(reportOutput, records);
   updateSaveButtonState(form, saveButton);
@@ -204,6 +211,8 @@ function initializeApp() {
       updateSaveButtonState(form, saveButton);
       return;
     }
+
+    records = prepareRecordsForSave(records);
 
     const weight = Number(weightText);
     const record = { date, weight };
@@ -227,6 +236,7 @@ function initializeApp() {
       setFormMessage(formMessage, `${date} の体重 ${weight} kg を保存しました。`, "success");
     }
 
+    records = prepareRecordsForSave(records);
     renderRecords(records);
     updateReportOutput(reportOutput, records);
 
