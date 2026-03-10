@@ -46,8 +46,22 @@ function saveRecord(records, record) {
   return nextRecords;
 }
 
-function updateRecord(records, index, record) {
-  const nextRecords = records.map((item, itemIndex) => (itemIndex === index ? record : item));
+function replaceRecordByDate(records, record) {
+  return records.map((item) => (item.date === record.date ? record : item));
+}
+
+function normalizeRecordsByDate(records) {
+  const recordMap = new Map();
+
+  records.forEach((record) => {
+    recordMap.set(record.date, record);
+  });
+
+  return Array.from(recordMap.values());
+}
+
+function updateRecord(records, record) {
+  const nextRecords = replaceRecordByDate(records, record);
   saveRecords(nextRecords);
   return nextRecords;
 }
@@ -111,8 +125,8 @@ function setFormMessage(messageElement, message, type) {
   messageElement.className = `form-message ${type}`;
 }
 
-function findRecordIndexByDate(records, date) {
-  return records.findIndex((record) => record.date === date);
+function hasRecordForDate(records, date) {
+  return records.some((record) => record.date === date);
 }
 
 function validateFormInput(date, weightText) {
@@ -170,7 +184,8 @@ function initializeApp() {
 
   dateInput.value = getTodayDate();
 
-  let records = loadRecords();
+  let records = normalizeRecordsByDate(loadRecords());
+  saveRecords(records);
   renderRecords(records);
   updateReportOutput(reportOutput, records);
   updateSaveButtonState(form, saveButton);
@@ -192,9 +207,9 @@ function initializeApp() {
 
     const weight = Number(weightText);
     const record = { date, weight };
-    const duplicateIndex = findRecordIndexByDate(records, date);
+    const hasDuplicate = hasRecordForDate(records, date);
 
-    if (duplicateIndex >= 0) {
+    if (hasDuplicate) {
       const confirmOverwrite = window.confirm(
         `${date} の記録はすでにあります。新しい体重 ${weight} kg で上書きしますか？`
       );
@@ -205,7 +220,7 @@ function initializeApp() {
         return;
       }
 
-      records = updateRecord(records, duplicateIndex, record);
+      records = updateRecord(records, record);
       setFormMessage(formMessage, `${date} の記録を上書きして保存しました。`, "success");
     } else {
       records = saveRecord(records, record);
