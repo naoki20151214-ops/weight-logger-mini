@@ -58,6 +58,10 @@ textarea {
   flex-wrap: wrap;
 }
 
+.report-button-row {
+  margin-top: 8px;
+}
+
 button {
   padding: 8px 12px;
   border: 1px solid #6b7280;
