@@ -1,5 +1,7 @@
 "use strict";
 
+const STORAGE_KEY = "weightLoggerRecords";
+
 function getTodayDate() {
   const today = new Date();
   const year = today.getFullYear();
@@ -9,13 +11,39 @@ function getTodayDate() {
 }
 
 function loadRecords() {
-  // TODO(Task 004): localStorage から記録を読み込む
-  return [];
+  const raw = localStorage.getItem(STORAGE_KEY);
+
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (item) =>
+        item &&
+        typeof item.date === "string" &&
+        typeof item.weight === "number" &&
+        Number.isFinite(item.weight)
+    );
+  } catch {
+    return [];
+  }
 }
 
-function saveRecord(record) {
-  // TODO(Task 004): localStorage への保存ロジックを実装する
-  console.log("saveRecord placeholder:", record);
+function saveRecords(records) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function saveRecord(records, record) {
+  const nextRecords = [...records, record];
+  saveRecords(nextRecords);
+  return nextRecords;
 }
 
 function renderRecords(records) {
@@ -36,12 +64,25 @@ function renderRecords(records) {
 }
 
 function buildChatGPTReport(records) {
-  // TODO(Task 004): 実データから報告文を組み立てる
   if (!records.length) {
     return "記録がまだないため、報告文を作成できません。";
   }
 
-  return `現在の記録件数は ${records.length} 件です。`;
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const latestRecord = sorted[sorted.length - 1];
+  const firstRecord = sorted[0];
+
+  return [
+    "体重ログの報告です。",
+    `記録件数: ${records.length} 件`,
+    `最新: ${latestRecord.date} / ${latestRecord.weight} kg`,
+    `開始: ${firstRecord.date} / ${firstRecord.weight} kg`,
+    "この内容をもとに、次の1週間の改善提案をお願いします。",
+  ].join("\n");
+}
+
+function updateReportOutput(reportOutput, records) {
+  reportOutput.value = buildChatGPTReport(records);
 }
 
 function initializeApp() {
@@ -58,25 +99,37 @@ function initializeApp() {
 
   let records = loadRecords();
   renderRecords(records);
+  updateReportOutput(reportOutput, records);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
     const formData = new FormData(form);
-    const record = {
-      date: String(formData.get("record-date") || ""),
-      weight: Number(formData.get("weight-value")),
-    };
+    const date = String(formData.get("record-date") || "").trim();
+    const weightText = String(formData.get("weight-value") || "").trim();
 
-    saveRecord(record);
+    if (!date || !weightText) {
+      return;
+    }
 
-    // Task 003 は仮実装: 画面上ではメモリ配列に追加して表示確認だけ行う
-    records = [...records, record];
+    const weight = Number(weightText);
+
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return;
+    }
+
+    const record = { date, weight };
+    records = saveRecord(records, record);
+
     renderRecords(records);
+    updateReportOutput(reportOutput, records);
+
+    form.reset();
+    dateInput.value = getTodayDate();
   });
 
   reportButton.addEventListener("click", () => {
-    reportOutput.value = buildChatGPTReport(records);
+    updateReportOutput(reportOutput, records);
   });
 }
 
