@@ -46,6 +46,12 @@ function saveRecord(records, record) {
   return nextRecords;
 }
 
+function updateRecord(records, index, record) {
+  const nextRecords = records.map((item, itemIndex) => (itemIndex === index ? record : item));
+  saveRecords(nextRecords);
+  return nextRecords;
+}
+
 function deleteRecord(records, index) {
   const nextRecords = records.filter((_, recordIndex) => recordIndex !== index);
   saveRecords(nextRecords);
@@ -100,14 +106,65 @@ function updateReportOutput(reportOutput, records) {
   reportOutput.value = buildChatGPTReport(records);
 }
 
+function setFormMessage(messageElement, message, type) {
+  messageElement.textContent = message;
+  messageElement.className = `form-message ${type}`;
+}
+
+function findRecordIndexByDate(records, date) {
+  return records.findIndex((record) => record.date === date);
+}
+
+function validateFormInput(date, weightText) {
+  if (!date) {
+    return "日付を入力してください。";
+  }
+
+  if (!weightText) {
+    return "体重を入力してください。";
+  }
+
+  const weight = Number(weightText);
+
+  if (!Number.isFinite(weight)) {
+    return "体重は数値で入力してください。";
+  }
+
+  if (weight <= 0) {
+    return "体重は 0 より大きい値を入力してください。";
+  }
+
+  return "";
+}
+
+function updateSaveButtonState(form, saveButton) {
+  const formData = new FormData(form);
+  const date = String(formData.get("record-date") || "").trim();
+  const weightText = String(formData.get("weight-value") || "").trim();
+  const hasError = validateFormInput(date, weightText) !== "";
+  saveButton.disabled = hasError;
+}
+
 function initializeApp() {
   const dateInput = document.getElementById("record-date");
+  const weightInput = document.getElementById("weight-value");
   const form = document.getElementById("weight-form");
+  const saveButton = document.getElementById("save-button");
+  const formMessage = document.getElementById("form-message");
   const reportButton = document.getElementById("build-report-button");
   const reportOutput = document.getElementById("report-output");
   const recordsList = document.getElementById("records-list");
 
-  if (!dateInput || !form || !reportButton || !reportOutput || !recordsList) {
+  if (
+    !dateInput ||
+    !weightInput ||
+    !form ||
+    !saveButton ||
+    !formMessage ||
+    !reportButton ||
+    !reportOutput ||
+    !recordsList
+  ) {
     return;
   }
 
@@ -116,6 +173,7 @@ function initializeApp() {
   let records = loadRecords();
   renderRecords(records);
   updateReportOutput(reportOutput, records);
+  updateSaveButtonState(form, saveButton);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -124,28 +182,52 @@ function initializeApp() {
     const date = String(formData.get("record-date") || "").trim();
     const weightText = String(formData.get("weight-value") || "").trim();
 
-    if (!date || !weightText) {
+    const validationMessage = validateFormInput(date, weightText);
+
+    if (validationMessage) {
+      setFormMessage(formMessage, validationMessage, "error");
+      updateSaveButtonState(form, saveButton);
       return;
     }
 
     const weight = Number(weightText);
-
-    if (!Number.isFinite(weight) || weight <= 0) {
-      return;
-    }
-
     const record = { date, weight };
-    records = saveRecord(records, record);
+    const duplicateIndex = findRecordIndexByDate(records, date);
+
+    if (duplicateIndex >= 0) {
+      const confirmOverwrite = window.confirm(
+        `${date} の記録はすでにあります。新しい体重 ${weight} kg で上書きしますか？`
+      );
+
+      if (!confirmOverwrite) {
+        setFormMessage(formMessage, "保存を中止しました。既存の記録は変更していません。", "info");
+        updateSaveButtonState(form, saveButton);
+        return;
+      }
+
+      records = updateRecord(records, duplicateIndex, record);
+      setFormMessage(formMessage, `${date} の記録を上書きして保存しました。`, "success");
+    } else {
+      records = saveRecord(records, record);
+      setFormMessage(formMessage, `${date} の体重 ${weight} kg を保存しました。`, "success");
+    }
 
     renderRecords(records);
     updateReportOutput(reportOutput, records);
 
     form.reset();
     dateInput.value = getTodayDate();
+    weightInput.focus();
+    updateSaveButtonState(form, saveButton);
+  });
+
+  form.addEventListener("input", () => {
+    updateSaveButtonState(form, saveButton);
   });
 
   reportButton.addEventListener("click", () => {
     updateReportOutput(reportOutput, records);
+    setFormMessage(formMessage, "保存済みデータから報告文を更新しました。", "info");
   });
 
   recordsList.addEventListener("click", (event) => {
@@ -165,6 +247,7 @@ function initializeApp() {
     records = deleteRecord(records, index);
     renderRecords(records);
     updateReportOutput(reportOutput, records);
+    setFormMessage(formMessage, "記録を削除しました。", "info");
   });
 }
 
