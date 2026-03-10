@@ -75,6 +75,23 @@ button:hover {
   padding-left: 20px;
 }
 
+.record-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.delete-button {
+  padding: 4px 8px;
+  font-size: 0.9rem;
+}
+
+.empty-message {
+  color: #4b5563;
+}
+
 @media (max-width: 480px) {
   .container {
     padding: 12px;
