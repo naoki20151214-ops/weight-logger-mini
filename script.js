@@ -98,26 +98,92 @@ function renderRecords(records) {
     .join("");
 }
 
+function formatDiff(diff) {
+  const rounded = Math.round(diff * 10) / 10;
+
+  if (rounded > 0) {
+    return `+${rounded.toFixed(1)}`;
+  }
+
+  if (rounded < 0) {
+    return `${rounded.toFixed(1)}`;
+  }
+
+  return "±0.0";
+}
+
 function buildChatGPTReport(records) {
   if (!records.length) {
-    return "記録がまだないため、報告文を作成できません。";
+    return [
+      "おはようございます。体重報告です。",
+      "",
+      "- 記録件数: 0件（まだ記録なし）",
+      "- 最新の記録: なし",
+      "- 最初の記録: なし",
+      "- 直近の変化: 比較できる記録がありません",
+      "- 開始時点からの変化: 比較できる記録がありません",
+      "",
+      "今日の記録を追加して、明日以降の変化を見ていきます。",
+    ].join("\n");
   }
 
   const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
   const latestRecord = sorted[sorted.length - 1];
   const firstRecord = sorted[0];
+  const previousRecord = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
 
-  return [
-    "体重ログの報告です。",
-    `記録件数: ${records.length} 件`,
-    `最新: ${latestRecord.date} / ${latestRecord.weight} kg`,
-    `開始: ${firstRecord.date} / ${firstRecord.weight} kg`,
-    "この内容をもとに、次の1週間の改善提案をお願いします。",
-  ].join("\n");
+  const reportLines = [
+    "おはようございます。体重報告です。",
+    "",
+    `- 記録件数: ${records.length}件`,
+    `- 最新の記録: ${latestRecord.date} ${latestRecord.weight}kg`,
+    `- 最初の記録: ${firstRecord.date} ${firstRecord.weight}kg`,
+  ];
+
+  if (previousRecord) {
+    const diffFromPrevious = latestRecord.weight - previousRecord.weight;
+    reportLines.push(
+      `- 直近の変化: ${previousRecord.date} ${previousRecord.weight}kg → ${latestRecord.date} ${latestRecord.weight}kg（${formatDiff(diffFromPrevious)}kg）`
+    );
+  } else {
+    reportLines.push("- 直近の変化: 比較できる記録がありません（記録は1件です）");
+  }
+
+  if (sorted.length >= 2) {
+    const diffFromStart = latestRecord.weight - firstRecord.weight;
+    reportLines.push(
+      `- 開始時点からの変化: ${firstRecord.date} ${firstRecord.weight}kg → ${latestRecord.date} ${latestRecord.weight}kg（${formatDiff(diffFromStart)}kg）`
+    );
+  } else {
+    reportLines.push("- 開始時点からの変化: 比較できる記録がありません（記録は1件です）");
+  }
+
+  reportLines.push("", "必要なら、明日の行動目標を短く提案してください。");
+
+  return reportLines.join("\n");
 }
 
 function updateReportOutput(reportOutput, records) {
   reportOutput.value = buildChatGPTReport(records);
+}
+
+async function copyReportText(reportOutput) {
+  const text = reportOutput.value;
+
+  if (!text) {
+    return false;
+  }
+
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  reportOutput.focus();
+  reportOutput.select();
+  const success = document.execCommand("copy");
+  reportOutput.setSelectionRange(0, 0);
+  return success;
 }
 
 function setFormMessage(messageElement, message, type) {
@@ -168,6 +234,8 @@ function initializeApp() {
   const reportButton = document.getElementById("build-report-button");
   const reportOutput = document.getElementById("report-output");
   const recordsList = document.getElementById("records-list");
+  const copyReportButton = document.getElementById("copy-report-button");
+  const reportMessage = document.getElementById("report-message");
 
   if (
     !dateInput ||
@@ -177,7 +245,9 @@ function initializeApp() {
     !formMessage ||
     !reportButton ||
     !reportOutput ||
-    !recordsList
+    !recordsList ||
+    !copyReportButton ||
+    !reportMessage
   ) {
     return;
   }
@@ -242,7 +312,26 @@ function initializeApp() {
 
   reportButton.addEventListener("click", () => {
     updateReportOutput(reportOutput, records);
+    reportMessage.textContent = "保存済みデータから報告文を更新しました。";
+    reportMessage.className = "form-message info";
     setFormMessage(formMessage, "保存済みデータから報告文を更新しました。", "info");
+  });
+
+  copyReportButton.addEventListener("click", async () => {
+    try {
+      const isCopied = await copyReportText(reportOutput);
+
+      if (isCopied) {
+        reportMessage.textContent = "報告文をコピーしました。ChatGPT にそのまま貼り付けて使えます。";
+        reportMessage.className = "form-message success";
+      } else {
+        reportMessage.textContent = "コピーできませんでした。報告文を手動で選択してコピーしてください。";
+        reportMessage.className = "form-message error";
+      }
+    } catch {
+      reportMessage.textContent = "コピーできませんでした。報告文を手動で選択してコピーしてください。";
+      reportMessage.className = "form-message error";
+    }
   });
 
   recordsList.addEventListener("click", (event) => {
