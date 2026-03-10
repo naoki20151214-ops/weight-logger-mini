@@ -46,6 +46,18 @@ function saveRecord(records, record) {
   return nextRecords;
 }
 
+function deleteRecord(records, index) {
+  const nextRecords = records.filter((_, recordIndex) => recordIndex !== index);
+  saveRecords(nextRecords);
+  return nextRecords;
+}
+
+function getRecordsNewestFirst(records) {
+  return records
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => b.record.date.localeCompare(a.record.date));
+}
+
 function renderRecords(records) {
   const recordsList = document.getElementById("records-list");
 
@@ -54,12 +66,15 @@ function renderRecords(records) {
   }
 
   if (!records.length) {
-    recordsList.innerHTML = "<li>まだ記録はありません。</li>";
+    recordsList.innerHTML = '<li class="empty-message">記録はまだありません。日付と体重を入力して保存してください。</li>';
     return;
   }
 
-  recordsList.innerHTML = records
-    .map((record) => `<li>${record.date}: ${record.weight} kg</li>`)
+  recordsList.innerHTML = getRecordsNewestFirst(records)
+    .map(
+      ({ record, index }) =>
+        `<li class="record-item"><span>${record.date}: ${record.weight} kg</span><button type="button" class="delete-button" data-record-index="${index}" aria-label="${record.date} ${record.weight}kg の記録を削除">削除</button></li>`
+    )
     .join("");
 }
 
@@ -90,8 +105,9 @@ function initializeApp() {
   const form = document.getElementById("weight-form");
   const reportButton = document.getElementById("build-report-button");
   const reportOutput = document.getElementById("report-output");
+  const recordsList = document.getElementById("records-list");
 
-  if (!dateInput || !form || !reportButton || !reportOutput) {
+  if (!dateInput || !form || !reportButton || !reportOutput || !recordsList) {
     return;
   }
 
@@ -129,6 +145,25 @@ function initializeApp() {
   });
 
   reportButton.addEventListener("click", () => {
+    updateReportOutput(reportOutput, records);
+  });
+
+  recordsList.addEventListener("click", (event) => {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement) || !target.classList.contains("delete-button")) {
+      return;
+    }
+
+    const rawIndex = target.dataset.recordIndex;
+    const index = Number(rawIndex);
+
+    if (!Number.isInteger(index) || index < 0 || index >= records.length) {
+      return;
+    }
+
+    records = deleteRecord(records, index);
+    renderRecords(records);
     updateReportOutput(reportOutput, records);
   });
 }
