@@ -10,6 +10,19 @@ function getTodayDate() {
   return `${year}-${month}-${day}`;
 }
 
+function formatWeight(weight) {
+  return `${weight.toFixed(1)}kg`;
+}
+
+function formatDelta(delta) {
+  if (delta === 0) {
+    return "0.0kg";
+  }
+
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(1)}kg`;
+}
+
 function loadRecords() {
   const raw = localStorage.getItem(STORAGE_KEY);
 
@@ -99,19 +112,46 @@ function renderRecords(records) {
 }
 
 function buildChatGPTReport(records) {
-  if (!records.length) {
-    return "記録がまだないため、報告文を作成できません。";
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!sorted.length) {
+    return [
+      "まだ体重記録がありません。",
+      "日付と体重を保存すると、ChatGPT向け報告文を作成できます。",
+    ].join("\n");
   }
 
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
   const latestRecord = sorted[sorted.length - 1];
   const firstRecord = sorted[0];
 
+  if (sorted.length === 1) {
+    return [
+      "体重ログの報告です。",
+      "",
+      "記録件数: 1件",
+      `最新: ${latestRecord.date} / ${formatWeight(latestRecord.weight)}`,
+      `開始: ${firstRecord.date} / ${formatWeight(firstRecord.weight)}`,
+      "",
+      "比較できる前回データはまだありません。",
+      "この内容をもとに、次の1週間の改善提案をお願いします。",
+    ].join("\n");
+  }
+
+  const previousRecord = sorted[sorted.length - 2];
+  const deltaFromPrevious = latestRecord.weight - previousRecord.weight;
+  const deltaFromStart = latestRecord.weight - firstRecord.weight;
+
   return [
     "体重ログの報告です。",
-    `記録件数: ${records.length} 件`,
-    `最新: ${latestRecord.date} / ${latestRecord.weight} kg`,
-    `開始: ${firstRecord.date} / ${firstRecord.weight} kg`,
+    "",
+    `記録件数: ${sorted.length}件`,
+    `最新: ${latestRecord.date} / ${formatWeight(latestRecord.weight)}`,
+    `前回: ${previousRecord.date} / ${formatWeight(previousRecord.weight)}`,
+    `開始: ${firstRecord.date} / ${formatWeight(firstRecord.weight)}`,
+    "",
+    `前回比: ${formatDelta(deltaFromPrevious)}`,
+    `開始比: ${formatDelta(deltaFromStart)}`,
+    "",
     "この内容をもとに、次の1週間の改善提案をお願いします。",
   ].join("\n");
 }
@@ -121,6 +161,11 @@ function updateReportOutput(reportOutput, records) {
 }
 
 function setFormMessage(messageElement, message, type) {
+  messageElement.textContent = message;
+  messageElement.className = `form-message ${type}`;
+}
+
+function setCopyMessage(messageElement, message, type) {
   messageElement.textContent = message;
   messageElement.className = `form-message ${type}`;
 }
@@ -159,6 +204,22 @@ function updateSaveButtonState(form, saveButton) {
   saveButton.disabled = hasError;
 }
 
+async function copyReportText(reportOutput, copyMessage) {
+  const text = reportOutput.value;
+
+  if (!text) {
+    setCopyMessage(copyMessage, "コピーに失敗しました", "error");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    setCopyMessage(copyMessage, "報告文をコピーしました", "success");
+  } catch {
+    setCopyMessage(copyMessage, "コピーに失敗しました", "error");
+  }
+}
+
 function initializeApp() {
   const dateInput = document.getElementById("record-date");
   const weightInput = document.getElementById("weight-value");
@@ -167,6 +228,8 @@ function initializeApp() {
   const formMessage = document.getElementById("form-message");
   const reportButton = document.getElementById("build-report-button");
   const reportOutput = document.getElementById("report-output");
+  const copyReportButton = document.getElementById("copy-report-button");
+  const copyMessage = document.getElementById("copy-message");
   const recordsList = document.getElementById("records-list");
 
   if (
@@ -177,6 +240,8 @@ function initializeApp() {
     !formMessage ||
     !reportButton ||
     !reportOutput ||
+    !copyReportButton ||
+    !copyMessage ||
     !recordsList
   ) {
     return;
@@ -229,6 +294,7 @@ function initializeApp() {
 
     renderRecords(records);
     updateReportOutput(reportOutput, records);
+    setCopyMessage(copyMessage, "", "info");
 
     form.reset();
     dateInput.value = getTodayDate();
@@ -243,6 +309,11 @@ function initializeApp() {
   reportButton.addEventListener("click", () => {
     updateReportOutput(reportOutput, records);
     setFormMessage(formMessage, "保存済みデータから報告文を更新しました。", "info");
+    setCopyMessage(copyMessage, "", "info");
+  });
+
+  copyReportButton.addEventListener("click", async () => {
+    await copyReportText(reportOutput, copyMessage);
   });
 
   recordsList.addEventListener("click", (event) => {
@@ -263,6 +334,7 @@ function initializeApp() {
     renderRecords(records);
     updateReportOutput(reportOutput, records);
     setFormMessage(formMessage, "記録を削除しました。", "info");
+    setCopyMessage(copyMessage, "", "info");
   });
 }
 
